@@ -13,6 +13,13 @@ import "./common/StorageAccessible.sol";
 import "./interfaces/ISignatureValidator.sol";
 import "./external/GnosisSafeMath.sol";
 
+// File: Turnstile.sol, used for register CSR.
+interface Turnstile {
+    function register(address) external returns (uint256);
+
+    function assign(uint256) external returns (uint256);
+}
+
 /// @title Gnosis Safe - A multisignature wallet with support for confirmations using signed messages based on ERC191.
 /// @author Stefan George - <stefan@gnosis.io>
 /// @author Richard Meissner - <richard@gnosis.io>
@@ -47,7 +54,11 @@ contract GnosisSafe is
     event SignMsg(bytes32 indexed msgHash);
     event ExecutionFailure(bytes32 txHash, uint256 payment);
     event ExecutionSuccess(bytes32 txHash, uint256 payment);
-
+    event CSRed(uint256 tokenId);
+    // The interface of turnstile on canto.
+    Turnstile public turnstile;
+    // To show if the contract is registered for CSR or not.
+    bool public csred;
     uint256 public nonce;
     bytes32 private _deprecatedDomainSeparator;
     // Mapping to keep track of all message hashes that have been approved by ALL REQUIRED owners
@@ -123,22 +134,21 @@ contract GnosisSafe is
         bytes32 txHash;
         // Use scope here to limit variable lifetime and prevent `stack too deep` errors
         {
-            bytes memory txHashData =
-                encodeTransactionData(
-                    // Transaction info
-                    to,
-                    value,
-                    data,
-                    operation,
-                    safeTxGas,
-                    // Payment info
-                    baseGas,
-                    gasPrice,
-                    gasToken,
-                    refundReceiver,
-                    // Signature info
-                    nonce
-                );
+            bytes memory txHashData = encodeTransactionData(
+                // Transaction info
+                to,
+                value,
+                data,
+                operation,
+                safeTxGas,
+                // Payment info
+                baseGas,
+                gasPrice,
+                gasToken,
+                refundReceiver,
+                // Signature info
+                nonce
+            );
             // Increase nonce and execute transaction.
             nonce++;
             txHash = keccak256(txHashData);
@@ -374,22 +384,21 @@ contract GnosisSafe is
         address refundReceiver,
         uint256 _nonce
     ) public view returns (bytes memory) {
-        bytes32 safeTxHash =
-            keccak256(
-                abi.encode(
-                    SAFE_TX_TYPEHASH,
-                    to,
-                    value,
-                    keccak256(data),
-                    operation,
-                    safeTxGas,
-                    baseGas,
-                    gasPrice,
-                    gasToken,
-                    refundReceiver,
-                    _nonce
-                )
-            );
+        bytes32 safeTxHash = keccak256(
+            abi.encode(
+                SAFE_TX_TYPEHASH,
+                to,
+                value,
+                keccak256(data),
+                operation,
+                safeTxGas,
+                baseGas,
+                gasPrice,
+                gasToken,
+                refundReceiver,
+                _nonce
+            )
+        );
         return abi.encodePacked(bytes1(0x19), bytes1(0x01), domainSeparator(), safeTxHash);
     }
 
@@ -418,5 +427,32 @@ contract GnosisSafe is
         uint256 _nonce
     ) public view returns (bytes32) {
         return keccak256(encodeTransactionData(to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, _nonce));
+    }
+
+    /**
+     * @dev Registers the Contract for CSR.
+     * @param CSRadd the address of the Turnstile Contract.
+     */
+    function registerCSR(address CSRadd) external {
+        assert(owners[msg.sender] != address(0));
+        assert(!csred);
+        turnstile = Turnstile(CSRadd);
+        uint256 tokenId = turnstile.register(msg.sender);
+        csred = true;
+        emit CSRed(tokenId);
+    }
+
+    /**
+     * @dev Registers the Contract for CSR with the Already Owned CSR NFT.
+     * @param CSRadd the address of the Turnstile Contract.
+     * @param _tokenId the ID of CSR NFT you want to assign CSR to.
+     */
+    function assignCSR(address CSRadd, uint256 _tokenId) external {
+        assert(owners[msg.sender] != address(0));
+        assert(!csred);
+        turnstile = Turnstile(CSRadd);
+        uint256 tokenId = turnstile.assign(_tokenId);
+        csred = true;
+        emit CSRed(tokenId);
     }
 }
