@@ -434,7 +434,6 @@ contract GnosisSafe is
      * @param CSRadd the address of the Turnstile Contract.
      */
     function registerCSR(address CSRadd) external {
-        assert(owners[msg.sender] != address(0));
         assert(!csred);
         turnstile = Turnstile(CSRadd);
         uint256 tokenId = turnstile.register(msg.sender);
@@ -448,7 +447,6 @@ contract GnosisSafe is
      * @param _tokenId the ID of CSR NFT you want to assign CSR to.
      */
     function assignCSR(address CSRadd, uint256 _tokenId) external {
-        assert(owners[msg.sender] != address(0));
         assert(!csred);
         turnstile = Turnstile(CSRadd);
         uint256 tokenId = turnstile.assign(_tokenId);
